@@ -29,45 +29,79 @@ class Scope:
         return None
 
 class HashTable:
+    class Node:
+        def __init__(self, key, value):
+            self.key = key
+            self.value = value
+            self.next = None
+
+    class Scope:
+        def __init__(self):
+            self.size = 100
+            self.table = [None] * self.size
+
+        def _hash(self, key):
+            return hash(key) % self.size
+
+        def insert(self, key, value, update_existing=False):
+            index = self._hash(key)
+            current = self.table[index]
+            while current:
+                if current.key == key:
+                    if update_existing:
+                        current.value = value
+                    return True  # key found and updated/skipped
+                current = current.next
+            if not update_existing:
+                new_node = HashTable.Node(key, value)
+                new_node.next = self.table[index]
+                self.table[index] = new_node
+                return True
+            return False  # key not found and update was requested
+
+        def search(self, key):
+            index = self._hash(key)
+            current = self.table[index]
+            while current:
+                if current.key == key:
+                    return current
+                current = current.next
+            return None
+
     def __init__(self):
-        self.scopes = [Scope() for _ in range(TABLESIZE)]
+        self.scopes = [self.Scope()]
         self.current_scope_index = 0
 
-    def insert(self, variable_name, value):
-        self.scopes[self.current_scope_index].insert(variable_name, value)
-
-    def search_value(self, variable_name):
+    def insert(self, key, value, update_existing=False):
+        # Try to update existing key in any visible scope
         for i in range(self.current_scope_index, -1, -1):
-            node = self.scopes[i].find(variable_name)
+            if update_existing:
+                updated = self.scopes[i].insert(key, value, update_existing=True)
+                if updated:
+                    return True
+        # If not found and not updating, insert into current scope
+        if not update_existing:
+            return self.scopes[self.current_scope_index].insert(key, value)
+        return False  # tried to update non-existent key
+
+    def search_value(self, key):
+        for i in range(self.current_scope_index, -1, -1):
+            node = self.scopes[i].search(key)
             if node:
                 return node.value
         return -1
 
-    def search_node(self, variable_name):
+    def key_exists(self, key):
         for i in range(self.current_scope_index, -1, -1):
-            node = self.scopes[i].find(variable_name)
-            if node:
-                return node
-        return None
-
-    def replace(self, variable_name, value):
-        node = self.search_node(variable_name)
-        if node:
-            node.value = value
-
-    def increment(self, variable_name):
-        node = self.search_node(variable_name)
-        if node:
-            node.value += 1
-
-    def decrement(self, variable_name):
-        node = self.search_node(variable_name)
-        if node:
-            node.value -= 1
+            if self.scopes[i].search(key):
+                return True
+        return False
 
     def start_scope(self):
+        self.scopes.append(self.Scope())
         self.current_scope_index += 1
 
     def finish_scope(self):
         if self.current_scope_index > 0:
+            self.scopes.pop()
             self.current_scope_index -= 1
